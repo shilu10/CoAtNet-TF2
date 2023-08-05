@@ -313,5 +313,85 @@ class Attention(tf.keras.layers.Layer):
     return x
 
 
+class Transformer(tf.keras.layers.Layer):
+    def __init__(self, 
+                 inp, 
+                 oup, 
+                 img_size, 
+                 num_heads=8, 
+                 head_dims=32, 
+                 downsample=False, 
+                 dropout=0., 
+                 norm_layer="layer_norm"
+              ):
+      
+        super(Transformer, self).__init__()
+        hidden_dim = int(inp * 4)
 
+        self.out_dim = oup
+
+        self.ih, self.iw = img_size
+        self.downsample = downsample
+        norm_layer = norm_layer_factory(norm_layer)
+
+        if self.downsample:
+            self.pool1 = tf.keras.layers.MaxPooling2D(pool_size=3, strides=2, padding='same')
+            self.pool2 = tf.keras.layers.MaxPooling2D(pool_size=3, strides=2, padding='same')
+            self.proj = tf.keras.layers.Conv2D(filters=oup, 
+                                               kernel_size=1, 
+                                               strides=1, 
+                                               padding='valid', 
+                                               use_bias=False
+                                            )
+
+        self.attn = Attention(inp, 
+                              oup, 
+                              num_heads, 
+                              head_dims, 
+                              img_size=img_size, 
+                              attn_drop=dropout, 
+                              proj_drop=dropout
+                          )
+        
+        self.ff = MLP(hidden_dim,
+                      oup, 
+                      drop_rate=dropout, 
+                      act_layer="gelu"
+                    )
+        
+        self.norm1 = norm_layer(name="norm1")
+        self.norm2 = norm_layer(name="norm2")
+
+    def call(self, x):
+        shortcut = x 
+
+        if self.downsample:
+          x = self.pool2(x)
+          shortcut = self.pool1(shortcut)
+          shortcut = self.proj(shortcut)
+
+        # reshape
+        _, h, w, c = tf.shape(x)
+        x = tf.reshape(x, (-1, h*w, c))
+
+        # residual 1 
+        x = self.norm1(x)
+        x = self.attn(x)
+        x = tf.reshape(x, (-1, self.ih, self.iw, self.out_dim))
+        x = shortcut + x
+
+        shortcut = x 
+
+        print(x.shape, "after first residual block")
+
+        # residual 2 
+        x = tf.reshape(x, (-1, self.ih*self.iw, self.out_dim))
+        x = self.norm2(x)
+        print(x.shape)
+        x = self.ff(x)
+        print(x.shape, 'ffn')
+        x = tf.reshape(x, (-1, self.ih, self.iw, self.out_dim))
+        x = shortcut + x 
+
+        return x 
 
