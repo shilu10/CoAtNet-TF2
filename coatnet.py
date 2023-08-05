@@ -396,7 +396,53 @@ class Transformer(tf.keras.layers.Layer):
 
         return x 
 
+class CoAtNet(tf.keras.models.Model):
+    def __init__(self, image_size, in_channels, num_blocks, channels, num_classes=1000, block_types=['C', 'C', 'T', 'T']):
+        super(CoAtNet, self).__init__()
+        self.block_types = block_types
+        self.in_channels = in_channels
+        self.ih, self.iw = image_size # iw - image_width, ih - image_height
+        self.block = {'C': MBConv, 'T': Transformer}
 
+        self.pool = tf.keras.layers.GlobalAveragePooling2D()
+        self.head = tf.keras.layers.Dense(units=num_classes, use_bias=False, name="classification_head")
+
+    def call(self, x):
+
+        x = self.s0(x)
+        x = self.s1(x)
+        x = self.s2(x)
+        x = self.s3(x)
+        x = self.s4(x)
+
+        print(x.shape, "======x=====")
+
+        x = self.pool(x)
+        x = self.head(x)
+        return x
+
+    def build(self, input_shape):
+      self.s0 = self._make_layer(
+            Conv_3x3_bn, self.in_channels, channels[0], num_blocks[0], (self.ih // 2, self.iw // 2))
+      self.s1 = self._make_layer(
+            self.block[self.block_types[0]], channels[0], channels[1], num_blocks[1], (self.ih // 4, self.iw // 4))
+      self.s2 = self._make_layer(
+            self.block[self.block_types[1]], channels[1], channels[2], num_blocks[2], (self.ih // 8, self.iw // 8))
+      self.s3 = self._make_layer(
+            self.block[self.block_types[2]], channels[2], channels[3], num_blocks[3], (self.ih // 16, self.iw // 16))
+      self.s4 = self._make_layer(
+            self.block[self.block_types[3]], channels[3], channels[4], num_blocks[4], (self.ih // 32, self.iw // 32))
+
+    def _make_layer(self, block, inp, oup, depth, image_size):
+        layers = []
+        for i in range(depth):
+            if i == 0:
+                print(block(inp, oup, image_size, downsample=True))
+                layers.append(block(inp, oup, image_size, downsample=True))
+            else:
+                layers.append(block(oup, oup, image_size))
+
+        return tf.keras.Sequential(layers) 
 
 
 
