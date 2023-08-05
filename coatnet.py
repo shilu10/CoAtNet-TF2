@@ -76,8 +76,8 @@ class MLP(tf.keras.layers.Layer):
         **kwargs,
     ):
         super(MLP, self).__init__(**kwargs)
-        self.hidden_dim = hidden_dim 
-        self.projection_dim = projection_dim 
+        self.hidden_dim = hidden_dim
+        self.projection_dim = projection_dim
         self.drop_rate = drop_rate
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
@@ -116,6 +116,7 @@ class MLP(tf.keras.layers.Layer):
         config["kernel_initializer"] = self.kernel_initializer
         config["bias_initializer"] = self.bias_initializer
         return config
+
                               
 
 class MBConv(tf.keras.layers.Layer):
@@ -213,3 +214,5 @@ class MBConv(tf.keras.layers.Layer):
 
         else:
             return shortcut + self.conv(x)
+
+
