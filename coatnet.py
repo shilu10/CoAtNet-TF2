@@ -1,6 +1,7 @@
 from tensorflow import keras 
 import tensorflow as tf 
 import numpy as np 
+from utils import act_layer_factory, norm_layer_factory
 
 
 def conv_3x3_bn(out_dims, 
@@ -394,4 +395,9 @@ class Transformer(tf.keras.layers.Layer):
         x = shortcut + x 
 
         return x 
+
+
+
+
+
 
