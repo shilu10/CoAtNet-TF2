@@ -4,26 +4,36 @@ import numpy as np
 from utils import act_layer_factory, norm_layer_factory
 
 
-def conv_3x3_bn(out_dims, 
-                image_size, 
-                downsample=False):
-  
-  stride = 1 if downsample == False else 2
+class Conv_3x3_bn(tf.keras.layers.Layer):
+  def __init__(self, inp_dims, out_dims, image_size, downsample=False):
 
-  input_ = tf.keras.layers.Input(shape=image_size)
+    super(Conv_3x3_bn, self).__init__()
 
-  x = tf.keras.layers.Conv2D(
-      kernel_size = 3, 
-      filters = out_dims,
-      strides = stride,
-      use_bias = False
-    )(input_)
-  
-  x = tf.keras.layers.BatchNormalization()(x)
-  
-  output_ = tf.nn.gelu(x)
+    self.inp_dims = inp_dims
+    self.downsample = downsample
+    stride = 1 if downsample == False else 2
 
-  return tf.keras.models.Model(inputs=input_, outputs=output_)
+    print(self.downsample)
+
+    self.conv = tf.keras.layers.Conv2D(
+        kernel_size = 3,
+        filters = out_dims,
+        strides = stride,
+        padding = 'same',
+        use_bias = False
+      )
+
+    print(self.conv)
+
+    self.norm = tf.keras.layers.BatchNormalization()
+    self.activation = tf.keras.layers.Activation(tf.keras.activations.gelu)
+
+  def call(self, x):
+    x = self.conv(x)
+    x = self.norm(x)
+    x = self.activation(x)
+
+    return x
 
 
 class PreNorm(tf.keras.layers.Layer):
@@ -445,5 +455,32 @@ class CoAtNet(tf.keras.models.Model):
         return tf.keras.Sequential(layers) 
 
 
+def coatnet_0():
+    num_blocks = [2, 2, 3, 5, 2]            # L
+    channels = [64, 96, 192, 384, 768]      # D
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes=1000)
 
+
+def coatnet_1():
+    num_blocks = [2, 2, 6, 14, 2]           # L
+    channels = [64, 96, 192, 384, 768]      # D
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes=1000)
+
+
+def coatnet_2():
+    num_blocks = [2, 2, 6, 14, 2]           # L
+    channels = [128, 128, 256, 512, 1026]   # D
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes=1000)
+
+
+def coatnet_3():
+    num_blocks = [2, 2, 6, 14, 2]           # L
+    channels = [192, 192, 384, 768, 1536]   # D
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes=1000)
+
+
+def coatnet_4():
+    num_blocks = [2, 2, 12, 28, 2]          # L
+    channels = [192, 192, 384, 768, 1536]   # D
+    return CoAtNet((224, 224), 3, num_blocks, channels, num_classes=1000)
 
