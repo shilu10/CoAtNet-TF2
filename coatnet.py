@@ -216,3 +216,102 @@ class MBConv(tf.keras.layers.Layer):
             return shortcut + self.conv(x)
 
 
+class Attention(tf.keras.layers.Layer):
+  def __init__(self,
+               inp_dims,
+               out_dims,
+               num_heads,
+               head_dims,
+               img_size,
+               attn_drop,
+               proj_drop,
+               qkv_bias=False,
+               **kwargs
+            ):
+
+    super(Attention, self).__init__(**kwargs)
+    inner_dim = head_dims * num_heads
+    self.inner_dim = inner_dim
+    self.inp_dims = inp_dims
+    self.num_heads = num_heads
+    self.head_dims = head_dims
+
+    self.ih, self.iw = img_size # self.ih, self.iw -> ih = image_height, iw -> image_width
+
+    self.qkv = tf.keras.layers.Dense(
+            inner_dim * 3, use_bias=qkv_bias, name="qkv"
+        )
+    self.attn_drop = tf.keras.layers.Dropout(attn_drop)
+    self.proj = tf.keras.layers.Dense(out_dims, name="proj")
+    self.proj_drop = tf.keras.layers.Dropout(proj_drop)
+
+
+  def build(self, input_shape):
+
+    # The weights have to be created inside the build() function for the right
+    # name scope to be set.
+    self.relative_position_bias_table = self.add_weight(
+          name="relative_position_bias_table",
+          shape=((2 * self.ih - 1) * (2 * self.iw - 1), self.num_heads),
+          initializer=tf.initializers.Zeros(),
+          trainable=True,
+        )
+
+    coords_h = np.arange(self.ih)
+    coords_w = np.arange(self.iw)
+    coords = np.stack(np.meshgrid(coords_h, coords_w, indexing="ij"))
+    coords_flatten = coords.reshape(2, -1)
+    relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+    relative_coords = relative_coords.transpose((1, 2, 0))
+    relative_coords[:, :, 0] += self.ih - 1
+    relative_coords[:, :, 1] += self.iw - 1
+    relative_coords[:, :, 0] *= 2 * self.iw - 1
+    relative_position_index = relative_coords.sum(-1).astype(np.int64)
+    self.relative_position_index = tf.Variable(
+          name="relative_position_index",
+          initial_value=tf.convert_to_tensor(relative_position_index),
+          trainable=False,
+      )
+
+  def call(self, x, training=False):
+    _, n, c = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2]
+    nb_heads = self.num_heads
+    window_size = self.ih * self.iw
+
+    # Inputs are the batch and the attention mask
+    _, n, c = tf.unstack(tf.shape(x))
+
+    qkv = self.qkv(x)
+    qkv = tf.reshape(qkv, shape=(-1, n, 3, nb_heads, self.head_dims))
+
+    qkv = tf.transpose(qkv, perm=(2, 0, 3, 1, 4))
+    q, k, v = tf.unstack(qkv)
+
+    scale = (self.inp_dims // self.num_heads) ** -0.5
+    q = q * scale
+    attn = q @ tf.transpose(k, perm=(0, 1, 3, 2))
+    relative_position_bias = tf.gather(
+        self.relative_position_bias_table,
+        tf.reshape(self.relative_position_index, shape=(-1,)),
+      )
+    relative_position_bias = tf.reshape(
+        relative_position_bias,
+        shape=(window_size, window_size, -1),
+      )
+    relative_position_bias = tf.transpose(relative_position_bias, perm=(2, 0, 1))
+    attn = attn + tf.expand_dims(relative_position_bias, axis=0)
+
+    attn = tf.nn.softmax(attn, axis=-1)
+    attn = self.attn_drop(attn, training=training)
+
+    x = tf.matmul(attn, v)
+    x = tf.transpose(x, perm=[0, 2, 1, 3])
+    x = tf.reshape(x, shape=(1, n, self.inner_dim))
+
+    x = self.proj(x)
+    x = self.proj_drop(x, training=training)
+    return x
+
+
+
+
