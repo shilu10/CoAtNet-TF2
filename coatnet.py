@@ -119,71 +119,71 @@ class MLP(tf.keras.layers.Layer):
                               
 
 class MBConv(tf.keras.layers.Layer):
-    def __init__(self, 
-                 inp_dims, 
-                 out_dims, 
-                 image_size, 
-                 downsample=False, 
+    def __init__(self,
+                 inp_dims,
+                 out_dims,
+                 image_size,
+                 downsample=False,
                  expansion=4,
                  **kwargs
               ):
-      
+
         super(MBConv, self).__init__(**kwargs)
         self.downsample = downsample
         stride = 1 if self.downsample == False else 2
         hidden_dim = int(inp_dims * expansion)
 
         if self.downsample:
-            self.pool = tf.keras.layers.MaxPooling2D(pool_size=3, 
-                                                     strides=2, 
+            self.pool = tf.keras.layers.MaxPooling2D(pool_size=3,
+                                                     strides=2,
                                                      padding='same')
-            
-            self.proj = tf.keras.layers.Conv2D(filters=out_dims, 
-                                               kernel_size=1, 
-                                               strides=1, 
-                                               padding="valid", 
+
+            self.proj = tf.keras.layers.Conv2D(filters=out_dims,
+                                               kernel_size=1,
+                                               strides=1,
+                                               padding="valid",
                                                use_bias=False)
-        
+
         if expansion == 1:
             self.conv = tf.keras.models.Sequential([
                 # dw
-                tf.keras.layers.DepthwiseConv2D(depth_multiplier=hidden_dim, 
-                                                kernel_size=3, 
-                                                strides=stride, 
-                                                padding="same", 
+                tf.keras.layers.Conv2D(filters=hidden_dim,
+                                                kernel_size=3,
+                                                strides=stride,
+                                                padding="same",
                                                 use_bias=False),
-                
+
                 tf.keras.layers.BatchNormalization(),
                 tf.keras.layers.Activation(tf.keras.activations.gelu),
 
                 # pw-linear
-                tf.keras.layers.Conv2D(filters=out_dims, 
-                          kernel_size=1, 
-                          strides=1, 
-                          padding='valid', 
+                tf.keras.layers.Conv2D(filters=out_dims,
+                          kernel_size=1,
+                          strides=1,
+                          padding='valid',
                           use_bias=False),
-                
+
                 tf.keras.layers.BatchNormalization(),
            ])
-            
+
         else:
             self.conv = tf.keras.models.Sequential([
                 # pw
                 # down-sample in the first conv
-                tf.keras.layers.Conv2D(filters=hidden_dim, 
-                          kernel_size=1, 
-                          strides=stride, 
-                          padding='valid', 
+                tf.keras.layers.Conv2D(filters=hidden_dim,
+                          kernel_size=1,
+                          strides=stride,
+                          padding='valid',
                           use_bias=False),
-                
+
                 tf.keras.layers.BatchNormalization(),
                 tf.keras.layers.Activation(tf.keras.activations.gelu),
 
                 # dw
-                tf.keras.layers.DepthwiseConv2D(depth_multiplier=hidden_dim, 
-                                                kernel_size=3, 
-                                                strides=1, 
-                                                padding="same", 
+                tf.keras.layers.Conv2D(filters=hidden_dim,
+                                                kernel_size=3,
+                                                strides=1,
+                                                padding="same",
                                                 use_bias=False),
 
                 tf.keras.layers.BatchNormalization(),
@@ -191,25 +191,25 @@ class MBConv(tf.keras.layers.Layer):
                 SE(inp_dims, hidden_dim),
 
                 # pw-linear
-                tf.keras.layers.Conv2D(filters=out_dims, 
-                          kernel_size=1, 
-                          strides=1, 
-                          padding='valid', 
+                tf.keras.layers.Conv2D(filters=out_dims,
+                          kernel_size=1,
+                          strides=1,
+                          padding='valid',
                           use_bias=False),
-                
+
                 tf.keras.layers.BatchNormalization(),
             ])
-        
+
         self.pre_norm = tf.keras.layers.BatchNormalization()
         #self.conv = PreNorm(inp_dims, self.conv, tf.keras.layers.BatchNormalization())
 
-    def forward(self, x):
-        shortcut = x 
+    def call(self, x):
+        shortcut = x
 
         x = self.pre_norm(x)
 
-        if self.downsample: 
+        if self.downsample:
             return self.proj(self.pool(x)) + self.conv(x)
 
-        else: 
-            return shortcut + self.conv(x) 
+        else:
+            return shortcut + self.conv(x)
